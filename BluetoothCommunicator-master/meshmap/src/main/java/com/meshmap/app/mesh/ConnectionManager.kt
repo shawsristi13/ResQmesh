@@ -108,7 +108,9 @@ class ConnectionManager(
     }
 
     private fun updatePeersList() {
-        val uniquePeers = communicator.connectedPeersList.distinctBy { it.uniqueName }
+        val uniquePeers = communicator.connectedPeersList
+            .filter { it.isFullyConnected }
+            .distinctBy { it.uniqueName }
         _connectedPeers.value = uniquePeers
     }
 }

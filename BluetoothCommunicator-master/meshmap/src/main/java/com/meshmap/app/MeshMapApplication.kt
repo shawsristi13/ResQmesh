@@ -3,6 +3,8 @@ package com.meshmap.app
 import android.app.Application
 import com.bluetooth.communicator.BluetoothCommunicator
 import com.bluetooth.communicator.tools.BluetoothTools
+import com.meshmap.app.db.MeshDatabase
+import com.meshmap.app.repository.MeshRepository
 import java.util.Random
 
 /**
@@ -17,8 +19,16 @@ class MeshMapApplication : Application() {
     var meshRelayManager: com.meshmap.app.mesh.MeshRelayManager? = null
         private set
 
+    lateinit var database: MeshDatabase
+        private set
+
+    lateinit var repository: MeshRepository
+        private set
+
     override fun onCreate() {
         super.onCreate()
+        database = MeshDatabase.getDatabase(this)
+        repository = MeshRepository(database.meshMessageDao())
     }
 
     /**
@@ -46,6 +56,6 @@ class MeshMapApplication : Application() {
             BluetoothCommunicator.STRATEGY_P2P_WITH_RECONNECTION
         )
         bluetoothCommunicator = communicator
-        meshRelayManager = com.meshmap.app.mesh.MeshRelayManager(this, communicator)
+        meshRelayManager = com.meshmap.app.mesh.MeshRelayManager(this, communicator, repository)
     }
 }

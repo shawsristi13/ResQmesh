@@ -16,6 +16,7 @@ class MeshViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as MeshMapApplication
     private val relayManager = app.meshRelayManager
+    private val repository = app.repository
 
     val connectedPeers = relayManager?.connectedPeers ?: MutableStateFlow(emptyList())
 
@@ -26,25 +27,11 @@ class MeshViewModel(application: Application) : AndroidViewModel(application) {
     val sosAlerts: StateFlow<List<MeshMessage>> = _sosAlerts.asStateFlow()
 
     init {
-        // Collect incoming messages from the relay manager
+        // Collect messages from the Room Database for persistence
         viewModelScope.launch {
-            relayManager?.incomingMessages?.collect { msg ->
-                // Add to messages list
-                val updatedMessages = _messages.value.toMutableList().apply {
-                    add(msg)
-                    // Keep last 100 messages in memory for now
-                    if (size > 100) removeAt(0)
-                }
-                _messages.value = updatedMessages
-                
-                // Add to SOS alerts if urgency > 0 or type is SOS
-                if (msg.urgency > 0 || msg.type == MeshMessageType.SOS) {
-                    val updatedSos = _sosAlerts.value.toMutableList().apply {
-                        add(msg)
-                        if (size > 50) removeAt(0)
-                    }
-                    _sosAlerts.value = updatedSos
-                }
+            repository.allMessages.collect { msgs ->
+                _messages.value = msgs
+                _sosAlerts.value = msgs.filter { it.urgency > 0 || it.type == MeshMessageType.SOS }
             }
         }
     }

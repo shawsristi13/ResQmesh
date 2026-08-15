@@ -4,9 +4,14 @@ import android.content.Context
 import android.util.Log
 import com.bluetooth.communicator.BluetoothCommunicator
 import com.bluetooth.communicator.Message as BtMessage
+import com.meshmap.app.repository.MeshRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
@@ -16,13 +21,18 @@ import java.util.concurrent.ConcurrentHashMap
  * - Receiving messages
  * - Deduplicating messages
  * - Decrementing TTL and forwarding to other peers
+ * - Persisting messages to database
  */
 class MeshRelayManager(
     private val context: Context,
-    private val communicator: BluetoothCommunicator
+    private val communicator: BluetoothCommunicator,
+    private val repository: MeshRepository
 ) {
     // Unique identifier for THIS device on the mesh
     private val myDeviceId: String = communicator.uniqueName
+
+    // Scope for background database operations
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Cache of seen message IDs to prevent infinite relay loops (thread-safe set)
     private val seenMessages = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
@@ -75,6 +85,11 @@ class MeshRelayManager(
         // Broadcast to all connected peers
         broadcastToMesh(message)
         
+        // Save to Database
+        scope.launch {
+            repository.insertMessage(message)
+        }
+        
         // Emit to local UI
         _incomingMessages.tryEmit(message)
     }
@@ -103,10 +118,15 @@ class MeshRelayManager(
         
         Log.d("MeshRelay", "Received new message: ${meshMessage.id} (hop: ${meshMessage.hopCount})")
 
-        // 3. Emit to local UI so user sees it
+        // 3. Save to Database
+        scope.launch {
+            repository.insertMessage(meshMessage)
+        }
+
+        // 4. Emit to local UI so user sees it
         _incomingMessages.tryEmit(meshMessage)
 
-        // 4. Relay logic (TTL Gate)
+        // 5. Relay logic (TTL Gate)
         if (meshMessage.ttl > 0) {
             meshMessage.ttl -= 1
             meshMessage.hopCount += 1
