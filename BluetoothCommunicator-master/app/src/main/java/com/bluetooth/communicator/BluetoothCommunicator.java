@@ -35,6 +35,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
 
+import android.annotation.SuppressLint;
+
 import androidx.annotation.Nullable;
 
 import com.bluetooth.communicator.tools.BluetoothTools;
@@ -236,6 +238,7 @@ import java.util.Objects;
  * <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
  * }</pre>
  */
+@SuppressLint({"MissingPermission", "HardwareIds"})
 public class BluetoothCommunicator {
     // constants
     public static final int CLIENT = 0;

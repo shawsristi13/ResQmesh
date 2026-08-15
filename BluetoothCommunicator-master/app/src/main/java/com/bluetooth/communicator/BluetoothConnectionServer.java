@@ -28,6 +28,7 @@ import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.util.Log;
 
+import android.annotation.SuppressLint;
 import androidx.annotation.NonNull;
 
 import com.bluetooth.communicator.tools.BluetoothTools;
@@ -38,6 +39,7 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 
+@SuppressLint("MissingPermission")
 class BluetoothConnectionServer extends BluetoothConnection {
     //costants
     public static final UUID CONNECTION_REQUEST_UUID = UUID.fromString("fa87c0d0-afac-11de-8a39-0857350c7a66");

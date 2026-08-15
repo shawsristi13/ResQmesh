@@ -28,6 +28,7 @@ import android.content.Context;
 import android.os.Build;
 import android.util.Log;
 
+import android.annotation.SuppressLint;
 import androidx.annotation.NonNull;
 
 import com.bluetooth.communicator.tools.BluetoothTools;
@@ -37,6 +38,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
+@SuppressLint("MissingPermission")
 class BluetoothConnectionClient extends BluetoothConnection {
     private BluetoothGattCallback channelsCallback;
     private ConnectionDeque pendingConnections = new ConnectionDeque();
