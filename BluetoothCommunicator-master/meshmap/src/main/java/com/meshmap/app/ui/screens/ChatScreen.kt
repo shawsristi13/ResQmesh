@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -54,6 +55,14 @@ fun ChatScreen(viewModel: MeshViewModel = viewModel()) {
                         "$connectedPeerCount peer${if (connectedPeerCount != 1) "s" else ""} in range",
                         style = MaterialTheme.typography.bodySmall,
                         color = if (connectedPeerCount > 0) SafetyGreen else TextDim
+                    )
+                }
+                
+                IconButton(onClick = { viewModel.clearChat() }) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Clear Chat",
+                        tint = TextDim
                     )
                 }
             }

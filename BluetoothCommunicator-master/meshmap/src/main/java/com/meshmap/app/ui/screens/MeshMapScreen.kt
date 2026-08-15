@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,6 +71,14 @@ fun MeshMapScreen(viewModel: MeshViewModel = viewModel()) {
                         color = if (connectedPeerCount > 0) SafetyGreen else TextDim
                     )
                 }
+
+                IconButton(onClick = { viewModel.restartMesh() }) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Default.Refresh,
+                        contentDescription = "Restart Scan",
+                        tint = IcyBlue
+                    )
+                }
             }
         }
 
@@ -117,16 +126,14 @@ fun MeshMapScreen(viewModel: MeshViewModel = viewModel()) {
                     strokeWidth = 2f
                 )
 
-                // Draw placeholder peer nodes around center
-                // (Will be replaced with real peer positions in Phase 5)
-                val demoNodes = listOf(
-                    Triple(0.3f, 45.0, NodeConnected),    // Close peer
-                    Triple(0.6f, 160.0, NodeRecentlySeen), // Mid-range peer
-                    Triple(0.8f, 280.0, NodeRecentlySeen)  // Far peer
-                )
-
                 if (connectedPeerCount > 0) {
-                    for ((distFraction, angleDeg, color) in demoNodes) {
+                    val angleStep = 360.0 / connectedPeerCount
+                    connectedPeersList.forEachIndexed { index, peer ->
+                        // Alternate distances between 0.4 and 0.8 to make it look scattered
+                        val distFraction = 0.4f + (index % 3) * 0.2f
+                        val angleDeg = index * angleStep
+                        val color = NodeConnected
+
                         val rad = Math.toRadians(angleDeg)
                         val nodeX = centerX + (maxRadius * distFraction * cos(rad)).toFloat()
                         val nodeY = centerY + (maxRadius * distFraction * sin(rad)).toFloat()

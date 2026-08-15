@@ -284,6 +284,9 @@ public class BluetoothCommunicator {
     private final Object dataLock = new Object();
     private final Object bluetoothLock = new Object();
     private BroadcastReceiver broadcastReceiver;
+    // Track discovered device addresses to deduplicate scan results.
+    // Entries are removed on disconnect so returning peers can be re-discovered.
+    private final java.util.Set<String> discoveredDevices = java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
 
 
     /**
@@ -387,8 +390,7 @@ public class BluetoothCommunicator {
                 Log.e("BluetoothCommunicator", "Advertise FAILED with errorCode: " + errorCode);
             }
         };
-        // Track discovered devices to avoid spamming onPeerFound for the same device
-        final java.util.Set<String> discoveredDevices = java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+        // discoveredDevices is now a class-level field (cleared on disconnect)
         discoveryCallback = new ScanCallback() {
             @Override
             public synchronized void onScanResult(int callbackType, ScanResult result) {
@@ -427,7 +429,17 @@ public class BluetoothCommunicator {
             @Override
             public void onScanFailed(int errorCode) {
                 super.onScanFailed(errorCode);
-                Log.e("BluetoothCommunicator", "Scan FAILED with errorCode: " + errorCode);
+                Log.e("BluetoothCommunicator", "Scan FAILED with errorCode: " + errorCode + ". Will retry in 2s...");
+                // Retry scan after a delay — error 2 (APP_REGISTRATION_FAILED) is often transient
+                mainHandler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (discovering && bluetoothAdapter != null) {
+                            Log.e("BluetoothCommunicator", "Retrying BLE scan after failure...");
+                            executeStartDiscovery();
+                        }
+                    }
+                }, 2000);
             }
         };
 
@@ -546,12 +558,15 @@ public class BluetoothCommunicator {
                     super.onDisconnected(peer);
                     if (connectionServer != null && connectionClient != null) {
                         int peersLeft = connectionServer.getConnectedPeers().size() + connectionClient.getConnectedPeers().size();
-                        if (connectionServer.getReconnectingPeers().size() == 0 && !advertising) {
-                            executeStopAdvertising();
+                        // Remove the disconnected peer's address from discoveredDevices
+                        // so it can be re-discovered if it comes back online.
+                        String peerAddress = peer.getDevice() != null ? peer.getDevice().getAddress() : null;
+                        if (peerAddress != null) {
+                            discoveredDevices.remove(peerAddress);
+                            Log.e("BluetoothCommunicator", "Removed " + peerAddress + " from discoveredDevices on disconnect (" + peer.getUniqueName() + ")");
                         }
-                        if (connectionClient.getReconnectingPeers().size() == 0 && !discovering) {
-                            executeStopDiscovery();
-                        }
+                        // NOTE: We intentionally do NOT stop advertising/discovery here.
+                        // In a mesh network, we must keep scanning for new or returning peers.
                         if (peersLeft == 0) {
                             // reset the queued messages to be sent
                             pendingMessages = new ArrayDeque<>();
@@ -690,11 +705,9 @@ public class BluetoothCommunicator {
                     if (advertising) {
                         //stop advertising
                         int ret;
-                        if (connectionServer.getReconnectingPeers().size() == 0) {
-                            ret = executeStopAdvertising();
-                        } else {
-                            ret = isBluetoothLeSupported();
-                        }
+                        // We always want to executeStopAdvertising in our Mesh implementation 
+                        // to prevent leaks and ensure a clean restart.
+                        ret = executeStopAdvertising();
                         if (ret == SUCCESS) {
                             advertising = false;
                             notifyAdvertiseStopped();
@@ -817,6 +830,13 @@ public class BluetoothCommunicator {
                     .build();
             BluetoothLeScanner scanner = bluetoothAdapter.getBluetoothLeScanner();
             if (scanner != null) {
+                // Stop any lingering scan first to prevent SCAN_FAILED_APPLICATION_REGISTRATION_FAILED (error 2)
+                // This can happen when the app is killed and restarted without the previous scan being cleaned up.
+                try {
+                    scanner.stopScan(discoveryCallback);
+                } catch (Exception e) {
+                    // Ignore — there may not be an active scan to stop
+                }
                 Log.e("BluetoothCommunicator", "Starting BLE scan with service UUID filter: " + BluetoothConnection.APP_UUID);
                 scanner.startScan(scanFilters, scanSettings, discoveryCallback);
                 return SUCCESS;
@@ -844,11 +864,9 @@ public class BluetoothCommunicator {
                     if (discovering) {
                         //stop advertising
                         int ret;
-                        if (connectionClient.getReconnectingPeers().size() == 0) {
-                            ret = executeStopDiscovery();
-                        } else {
-                            ret = SUCCESS;
-                        }
+                        // We always want to executeStopDiscovery in our Mesh implementation 
+                        // to prevent SCAN_FAILED_APPLICATION_REGISTRATION_FAILED (error 2) leaks.
+                        ret = executeStopDiscovery();
                         if (ret == SUCCESS) {
                             discovering = false;
                             notifyDiscoveryStopped();

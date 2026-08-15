@@ -56,4 +56,11 @@ class MeshMapActivity : ComponentActivity() {
         app.initializeMesh()
         app.meshRelayManager?.start()
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        android.util.Log.e("MeshApp", "MeshMapActivity onDestroy, stopping mesh...")
+        val app = application as MeshMapApplication
+        app.meshRelayManager?.stop()
+    }
 }

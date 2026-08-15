@@ -59,6 +59,17 @@ class MeshRelayManager(
     }
 
     /**
+     * Restart the mesh networking layer.
+     */
+    fun restart() {
+        connectionManager.stopMesh()
+        // Adding a slight delay might be safer for the Bluetooth stack
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            connectionManager.startMesh()
+        }, 500)
+    }
+
+    /**
      * Expose the live list of connected peers.
      */
     val connectedPeers = connectionManager.connectedPeers

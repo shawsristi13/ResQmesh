@@ -66,4 +66,18 @@ class MeshViewModel(application: Application) : AndroidViewModel(application) {
             urgency = 2 // Always critical
         )
     }
+
+    fun clearChat() {
+        viewModelScope.launch {
+            repository.clearMessages()
+        }
+    }
+
+    fun stopMesh() {
+        app.meshRelayManager?.stop()
+    }
+
+    fun restartMesh() {
+        app.meshRelayManager?.restart()
+    }
 }

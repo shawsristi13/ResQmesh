@@ -76,13 +76,23 @@ class ConnectionManager(
 
         override fun onDisconnected(peer: Peer, peersLeft: Int) {
             super.onDisconnected(peer, peersLeft)
-            Log.e("ConnectionManager", "Disconnected from: ${peer.name}")
+            Log.e("ConnectionManager", "Disconnected from: ${peer.name}. Peers left: $peersLeft. Restarting mesh scan...")
             updatePeersList()
+            // Re-kick discovery/advertising so we can find returning or new peers.
+            // The BLE library may have stopped scanning internally.
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                Log.e("ConnectionManager", "Re-starting mesh after disconnect...")
+                startMesh()
+            }, 1000) // 1 second delay to let BLE stack settle
         }
 
         override fun onConnectionFailed(peer: Peer, errorCode: Int) {
             super.onConnectionFailed(peer, errorCode)
-            Log.e("ConnectionManager", "Connection failed with: ${peer.name}, errorCode: $errorCode")
+            Log.e("ConnectionManager", "Connection failed with: ${peer.name}, errorCode: $errorCode. Will retry scan...")
+            // Re-kick discovery so we can try to find and connect to this peer again
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                startMesh()
+            }, 2000)
         }
 
         override fun onMessageReceived(message: Message, source: Int) {
