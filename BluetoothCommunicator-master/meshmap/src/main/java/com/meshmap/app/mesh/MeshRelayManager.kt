@@ -83,6 +83,7 @@ class MeshRelayManager(
         seenMessages.add(message.id)
 
         // Broadcast to all connected peers
+        Log.e("MeshRelay", "sendLocalMessage: Broadcasting new message ${message.id} to mesh")
         broadcastToMesh(message)
         
         // Save to Database
@@ -109,14 +110,14 @@ class MeshRelayManager(
 
         // 1. Deduplication Gate
         if (seenMessages.contains(meshMessage.id)) {
-            Log.d("MeshRelay", "Dropping duplicate message: ${meshMessage.id}")
+            Log.e("MeshRelay", "Dropping duplicate message: ${meshMessage.id} from ${meshMessage.originName}")
             return
         }
         
         // 2. Mark as seen
         seenMessages.add(meshMessage.id)
         
-        Log.d("MeshRelay", "Received new message: ${meshMessage.id} (hop: ${meshMessage.hopCount})")
+        Log.e("MeshRelay", "Received new message: ${meshMessage.id} (hop: ${meshMessage.hopCount}, origin: ${meshMessage.originName})")
 
         // 3. Save to Database
         scope.launch {
@@ -132,13 +133,10 @@ class MeshRelayManager(
             meshMessage.hopCount += 1
             meshMessage.hopPath.add(myDeviceId)
             
-            // Re-serialize and broadcast (excluding the peer that just sent it to us)
-            // Note: BluetoothCommunicator's null receiver broadcasts to everyone. 
-            // In a strict mesh, we would avoid sending it back to `rawBtMessage.sender`.
-            // But since our deduplication handles echoes, broadcasting to everyone is safe and robust.
+            Log.e("MeshRelay", "Relaying message ${meshMessage.id} (new TTL: ${meshMessage.ttl}, new hop: ${meshMessage.hopCount})")
             broadcastToMesh(meshMessage)
         } else {
-            Log.d("MeshRelay", "Message ${meshMessage.id} reached TTL 0. Dropping.")
+            Log.e("MeshRelay", "Message ${meshMessage.id} reached TTL 0. Dropping relay.")
         }
     }
 

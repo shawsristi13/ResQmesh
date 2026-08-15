@@ -36,6 +36,7 @@ import android.os.Looper;
 import android.os.ParcelUuid;
 
 import android.annotation.SuppressLint;
+import android.util.Log;
 
 import androidx.annotation.Nullable;
 
@@ -377,37 +378,42 @@ public class BluetoothCommunicator {
             @Override
             public void onStartSuccess(AdvertiseSettings settingsInEffect) {
                 super.onStartSuccess(settingsInEffect);
+                Log.e("BluetoothCommunicator", "Advertise started successfully. Mode: " + settingsInEffect.getMode() + ", TxPower: " + settingsInEffect.getTxPowerLevel() + ", Name: " + (bluetoothAdapter != null ? bluetoothAdapter.getName() : "null"));
             }
 
             @Override
             public void onStartFailure(int errorCode) {
                 super.onStartFailure(errorCode);
+                Log.e("BluetoothCommunicator", "Advertise FAILED with errorCode: " + errorCode);
             }
         };
+        // Track discovered devices to avoid spamming onPeerFound for the same device
+        final java.util.Set<String> discoveredDevices = java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
         discoveryCallback = new ScanCallback() {
             @Override
             public synchronized void onScanResult(int callbackType, ScanResult result) {
                 super.onScanResult(callbackType, result);
-                switch (callbackType) {
-                    case ScanSettings.CALLBACK_TYPE_FIRST_MATCH: {
-                        BluetoothDevice device1 = result.getDevice();
-                        if (result.getScanRecord() != null && connectionClient != null) {
-                            String uniqueName = result.getScanRecord().getDeviceName();
-                            if (uniqueName != null && uniqueName.length() > 0) {
-                                Peer peerFound = new Peer(device1, uniqueName, false);
-                                if (connectionClient.getReconnectingPeers().contains(peerFound.getUniqueName())) {
-                                    connectionClient.onReconnectingPeerFound(peerFound);
-                                } else {
-                                    notifyPeerFound(peerFound);
-                                }
+                BluetoothDevice device1 = result.getDevice();
+                String deviceAddress = device1.getAddress();
+                String scanName = (result.getScanRecord() != null) ? result.getScanRecord().getDeviceName() : null;
+                Log.d("BluetoothCommunicator", "onScanResult: callbackType=" + callbackType + ", device=" + deviceAddress + ", scanName=" + scanName + ", rssi=" + result.getRssi());
+
+                if (result.getScanRecord() != null && connectionClient != null) {
+                    String uniqueName = result.getScanRecord().getDeviceName();
+                    if (uniqueName != null && uniqueName.length() > 0) {
+                        // Only notify once per device address to avoid spamming
+                        if (!discoveredDevices.contains(deviceAddress)) {
+                            discoveredDevices.add(deviceAddress);
+                            Log.e("BluetoothCommunicator", "NEW peer discovered: " + uniqueName + " (" + deviceAddress + ")");
+                            Peer peerFound = new Peer(device1, uniqueName, false);
+                            if (connectionClient.getReconnectingPeers().contains(peerFound.getUniqueName())) {
+                                connectionClient.onReconnectingPeerFound(peerFound);
+                            } else {
+                                notifyPeerFound(peerFound);
                             }
                         }
-                        break;
-                    }
-                    case ScanSettings.CALLBACK_TYPE_MATCH_LOST: {
-                        BluetoothDevice device1 = result.getDevice();
-                        notifyPeerLost(new Peer(device1, null, false));
-                        break;
+                    } else {
+                        Log.w("BluetoothCommunicator", "Scan found device " + deviceAddress + " with our service UUID but NO name in scan record. Bond state: " + device1.getBondState());
                     }
                 }
             }
@@ -415,11 +421,13 @@ public class BluetoothCommunicator {
             @Override
             public void onBatchScanResults(List<ScanResult> results) {
                 super.onBatchScanResults(results);
+                Log.d("BluetoothCommunicator", "onBatchScanResults: " + results.size() + " results");
             }
 
             @Override
             public void onScanFailed(int errorCode) {
                 super.onScanFailed(errorCode);
+                Log.e("BluetoothCommunicator", "Scan FAILED with errorCode: " + errorCode);
             }
         };
 
@@ -634,7 +642,14 @@ public class BluetoothCommunicator {
         if (advertisementSupportedCode == SUCCESS) {
             //name update
             originalName = bluetoothAdapter.getName();
+            Log.e("BluetoothCommunicator", "Setting adapter name from '" + originalName + "' to '" + uniqueName + "'");
             bluetoothAdapter.setName(uniqueName);
+
+            // Brief delay to allow name change to propagate to the advertisement stack
+            try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+            String currentName = bluetoothAdapter.getName();
+            Log.e("BluetoothCommunicator", "Adapter name after set: '" + currentName + "'");
+
             //start advertizing
             AdvertiseSettings advertiseSettings = new AdvertiseSettings.Builder()
                     .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)  //alto
@@ -652,6 +667,7 @@ public class BluetoothCommunicator {
                 advertiser.startAdvertising(advertiseSettings, advertiseData, advertiseCallback);
                 return SUCCESS;
             } else {
+                Log.e("BluetoothCommunicator", "BluetoothLeAdvertiser is null");
                 return ERROR;
             }
         } else {
@@ -790,18 +806,22 @@ public class BluetoothCommunicator {
             scanFilters.add(new ScanFilter.Builder()
                     .setServiceUuid(new ParcelUuid(BluetoothConnection.APP_UUID))
                     .build());
+            // Use CALLBACK_TYPE_ALL_MATCHES for reliability on Android 12+
+            // FIRST_MATCH can miss devices when the name isn't cached for unbonded devices
             ScanSettings scanSettings = new ScanSettings.Builder()
                     .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                     .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
                     .setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
                     .setReportDelay(0)
-                    .setCallbackType(ScanSettings.CALLBACK_TYPE_FIRST_MATCH | ScanSettings.CALLBACK_TYPE_MATCH_LOST)
+                    .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
                     .build();
             BluetoothLeScanner scanner = bluetoothAdapter.getBluetoothLeScanner();
             if (scanner != null) {
+                Log.e("BluetoothCommunicator", "Starting BLE scan with service UUID filter: " + BluetoothConnection.APP_UUID);
                 scanner.startScan(scanFilters, scanSettings, discoveryCallback);
                 return SUCCESS;
             } else {
+                Log.e("BluetoothCommunicator", "BluetoothLeScanner is null");
                 return ERROR;
             }
         } else {

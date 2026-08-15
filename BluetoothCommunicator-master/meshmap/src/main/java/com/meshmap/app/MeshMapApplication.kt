@@ -36,7 +36,11 @@ class MeshMapApplication : Application() {
      * The underlying library requires permissions during initialization.
      */
     fun initializeMesh() {
-        if (bluetoothCommunicator != null) return
+        android.util.Log.e("MeshApp", "initializeMesh called")
+        if (bluetoothCommunicator != null) {
+            android.util.Log.e("MeshApp", "bluetoothCommunicator already initialized, returning")
+            return
+        }
 
         var name = android.os.Build.MODEL
         val supportedChars = BluetoothTools.getSupportedUTFCharacters(this)
@@ -49,6 +53,8 @@ class MeshMapApplication : Application() {
         if (name.length > 14) {
             name = name.substring(0, 14)
         }
+        
+        android.util.Log.e("MeshApp", "Creating BluetoothCommunicator with name: $name")
 
         val communicator = BluetoothCommunicator(
             this,
@@ -56,6 +62,7 @@ class MeshMapApplication : Application() {
             BluetoothCommunicator.STRATEGY_P2P_WITH_RECONNECTION
         )
         bluetoothCommunicator = communicator
+        android.util.Log.e("MeshApp", "Creating MeshRelayManager")
         meshRelayManager = com.meshmap.app.mesh.MeshRelayManager(this, communicator, repository)
     }
 }

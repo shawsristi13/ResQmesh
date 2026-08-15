@@ -28,11 +28,14 @@ class MeshMapActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        android.util.Log.e("MeshApp", "MeshMapActivity onCreate")
 
         // Request permissions on launch
         if (!PermissionHelper.hasAllPermissions(this)) {
+            android.util.Log.e("MeshApp", "Permissions missing, requesting...")
             permissionLauncher.launch(PermissionHelper.getRequiredPermissions())
         } else {
+            android.util.Log.e("MeshApp", "Permissions granted, starting mesh")
             startMesh()
         }
 
