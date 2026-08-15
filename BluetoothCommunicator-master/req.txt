@@ -1,0 +1,4 @@
+Android Studio Iguana or newer
+Gradle 8.7+
+Android SDK 34 (Minimum SDK 24)
+Java 17
